@@ -1,0 +1,167 @@
+import warnings
+import os
+import snowflake.connector
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# Replace these with your Snowflake account credentials and connection details
+account = 'helpathome.east-us-2.azure'  # Replace with your Snowflake account URL
+warehouse = 'DEMO_WH'
+database = 'DISC_PROD'
+username = 'rparmar'  # Replace with your Snowflake username
+password = '$RU_chit@2013'  # Replace with your Snowflake password
+
+# List of schemas to iterate through
+# schemas = ['AXXESS']
+
+#  Create the SQL_Files and Schema folders
+sql_files_dir = "SQL_Files"
+schema_dir = os.path.join(sql_files_dir, "Schema")
+
+if not os.path.exists(sql_files_dir):
+    os.mkdir(sql_files_dir)
+
+if not os.path.exists(schema_dir):
+    os.mkdir(schema_dir)
+
+# Establish a connection to Snowflake
+conn = snowflake.connector.connect(
+    user=username,
+    password=password,
+    account=account,
+    warehouse=warehouse,
+    database=database
+)
+
+# Create a cursor to execute SQL queries
+cursor = conn.cursor()
+
+# Query Snowflake to get a list of tables in the specified database and schema
+schema_query = f'''
+    SELECT DISTINCT SCHEMA_NAME ,IS_TRANSIENT,IS_MANAGED_ACCESS,RETENTION_TIME
+    FROM {database}.information_schema.SCHEMATA
+'''
+
+# Execute the query to get the list of tables
+cursor.execute(schema_query)
+
+# Fetch the results
+schema = cursor.fetchall()
+# print(schema)
+# Close the cursor and connection when done with the table query
+cursor.close()
+
+if schema:
+    # Iterate through the tables and retrieve DDL statements
+    for schema_info in schema:
+#         print(schema_info)
+        schema_name = schema_info[0]
+#         print(schema_name)
+        
+        # Construct the fully qualified table name
+        fully_qualified_table_name = f'{database}.{schema}'
+
+        # Query to retrieve the DDL statement for the table
+        ddl_query = f'''
+            SELECT GET_DDL('SCHEMA', '{schema}')
+        '''
+#         print(ddl_query)
+#         # Create a new cursor for the DDL query
+        cursor = conn.cursor()
+
+#         # Execute the DDL query
+        cursor.execute(ddl_query)
+
+#         # Fetch the DDL statement
+        ddl_statement = cursor.fetchone()[0]
+        print(ddl_statement)
+
+#         # Modify the DDL statement to include the database and schema names
+#         modified_ddl_statement = ddl_statement.replace(f'create or replace schema {schema_name}',
+#                                                       f'CREATE OR REPLACE SCHEMA {fully_qualified_table_name}')
+
+#         # Step 2: Create a .sql file and write the DDL statement to it
+#         sql_file_name = f"{table_dir}/{fully_qualified_table_name}.sql"
+#         with open(sql_file_name, 'w') as sql_file:
+#             sql_file.write(modified_ddl_statement)
+
+#         # Step 3: Print the file name (database.schema.table name)
+#         print(f"Generated SQL file: {sql_file_name}")
+
+#         # Close the cursor for the DDL query
+#         cursor.close()
+# else:
+#     print(f"No tables found in the specified schema '{schema}' in database '{database}'.")
+
+# Close the connection
+conn.close()
+
+
+---------------------------------------------------------------------------
+ProgrammingError                          Traceback (most recent call last)
+Cell In[9], line 73
+     70         cursor = conn.cursor()
+     72 #         # Execute the DDL query
+---> 73         cursor.execute(ddl_query)
+     75 #         # Fetch the DDL statement
+     76         ddl_statement = cursor.fetchone()[0]
+
+File ~\AppData\Local\anaconda3\Lib\site-packages\snowflake\connector\cursor.py:1136, in SnowflakeCursor.execute(self, command, params, _bind_stage, timeout, _exec_async, _no_retry, _do_reset, _put_callback, _put_azure_callback, _put_callback_output_stream, _get_callback, _get_azure_callback, _get_callback_output_stream, _show_progress_bar, _statement_params, _is_internal, _describe_only, _no_results, _is_put_get, _raise_put_get_error, _force_put_overwrite, _skip_upload_on_content_match, file_stream, num_statements)
+   1132     is_integrity_error = (
+   1133         code == "100072"
+   1134     )  # NULL result in a non-nullable column
+   1135     error_class = IntegrityError if is_integrity_error else ProgrammingError
+-> 1136     Error.errorhandler_wrapper(self.connection, self, error_class, errvalue)
+   1137 return self
+
+File ~\AppData\Local\anaconda3\Lib\site-packages\snowflake\connector\errors.py:290, in Error.errorhandler_wrapper(connection, cursor, error_class, error_value)
+    267 @staticmethod
+    268 def errorhandler_wrapper(
+    269     connection: SnowflakeConnection | None,
+   (...)
+    272     error_value: dict[str, Any],
+    273 ) -> None:
+    274     """Error handler wrapper that calls the errorhandler method.
+    275 
+    276     Args:
+   (...)
+    287         exception to the first handler in that order.
+    288     """
+--> 290     handed_over = Error.hand_to_other_handler(
+    291         connection,
+    292         cursor,
+    293         error_class,
+    294         error_value,
+    295     )
+    296     if not handed_over:
+    297         raise Error.errorhandler_make_exception(
+    298             error_class,
+    299             error_value,
+    300         )
+
+File ~\AppData\Local\anaconda3\Lib\site-packages\snowflake\connector\errors.py:345, in Error.hand_to_other_handler(connection, cursor, error_class, error_value)
+    343 if cursor is not None:
+    344     cursor.messages.append((error_class, error_value))
+--> 345     cursor.errorhandler(connection, cursor, error_class, error_value)
+    346     return True
+    347 elif connection is not None:
+
+File ~\AppData\Local\anaconda3\Lib\site-packages\snowflake\connector\errors.py:221, in Error.default_errorhandler(connection, cursor, error_class, error_value)
+    219 errno = error_value.get("errno")
+    220 done_format_msg = error_value.get("done_format_msg")
+--> 221 raise error_class(
+    222     msg=error_value.get("msg"),
+    223     errno=None if errno is None else int(errno),
+    224     sqlstate=error_value.get("sqlstate"),
+    225     sfqid=error_value.get("sfqid"),
+    226     query=error_value.get("query"),
+    227     done_format_msg=(
+    228         None if done_format_msg is None else bool(done_format_msg)
+    229     ),
+    230     connection=connection,
+    231     cursor=cursor,
+    232 )
+
+ProgrammingError: 001003 (42000): SQL compilation error:
+syntax error line 1 at position 29 unexpected '1'.
+syntax error line 1 at position 38 unexpected '', ''.
